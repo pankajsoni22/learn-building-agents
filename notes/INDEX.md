@@ -4,9 +4,9 @@
 
 | # | Topic | Status | Key Takeaway |
 |---|-------|--------|--------------|
-| 1 | Foundations | In Progress | Agent = LLM + Tools + Loop (Observe → Think → Act) |
-| 2 | Tool Use | Not Started | How agents call external functions and APIs |
-| 3 | Multi-Step Reasoning | Not Started | Loops, state, and memory across steps |
+| 1 | Foundations | Done | Agent = LLM + Tools + Loop (Observe → Think → Act) |
+| 2 | Tool Use | Done | LLMs request tool calls via schemas; we execute and return results |
+| 3 | Multi-Step Reasoning | Done | Agent state (dedup/filter/count in code) + hard stops you validate, not just trust |
 | 4 | Planning & Decomposition | Not Started | Breaking tasks into subtasks, ReAct pattern |
 | 5 | Error Handling & Recovery | Not Started | Retries, fallbacks, self-correction |
 | 6 | Human-in-the-Loop | Not Started | Approval gates and user input mid-execution |

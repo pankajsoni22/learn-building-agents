@@ -21,6 +21,27 @@ This lesson defines what an AI agent is, how it differs from chatbots and pipeli
    - *Analogy:* Like a REPL (Read-Eval-Print Loop), but the "Eval" step is an LLM choosing from a menu of tools.
    - *Why it matters:* This is the fundamental pattern. Every agent framework (LangChain, CrewAI, AutoGen) implements this loop internally. Understanding it means you can build agents *without* a framework, and debug them *within* one.
 
+The difference between these three is easier to see visually:
+
+```mermaid
+flowchart LR
+    subgraph Chatbot["Chatbot (one round-trip)"]
+        C1[User input] --> C2[LLM] --> C3[Response]
+    end
+
+    subgraph Pipeline["Pipeline (fixed path)"]
+        P1[Input] --> P2[Step 1] --> P3[Step 2] --> P4[Step 3] --> P5[Output]
+    end
+
+    subgraph Agent["Agent (dynamic loop)"]
+        A1[Input] --> A2[Observe]
+        A2 --> A3{Think / LLM}
+        A3 -->|call tool| A4[Act]
+        A4 --> A2
+        A3 -->|done| A5[Final Answer]
+    end
+```
+
 4. **Action as Data** — The agent's decision is represented as a structured dict (`{'tool': 'name', 'args': {...}}`), not a direct function call.
    - *Analogy:* Like the Command pattern in OOP — actions are objects that can be inspected, logged, validated, and then executed.
    - *Why it matters:* When the brain is an LLM, it returns text. We parse that text into a structured action dict. Keeping actions as data lets us validate them before execution (did the LLM pick a real tool? Are the arguments valid?).
@@ -31,36 +52,16 @@ This lesson defines what an AI agent is, how it differs from chatbots and pipeli
 
 ## How It Works (Step by Step)
 
-```
-User gives a task
-       │
-       ▼
-┌─── LOOP START ───────────────────────┐
-│                                      │
-│  1. OBSERVE: read last result        │
-│       (first time = user's input)    │
-│              │                       │
-│              ▼                       │
-│  2. THINK: LLM/algorithm decides     │
-│       → which tool to call           │
-│       → what arguments to pass       │
-│       → OR return "done" + answer    │
-│              │                       │
-│              ▼                       │
-│  3. Is the action "done"?            │
-│       YES → return final answer      │
-│       NO  → continue                 │
-│              │                       │
-│              ▼                       │
-│  4. ACT: call the chosen tool        │
-│       → get back an observation      │
-│              │                       │
-│              ▼                       │
-│  5. Step count < max_steps?          │
-│       YES → go to step 1            │
-│       NO  → stop (safety limit)      │
-│                                      │
-└──────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[User gives a task] --> B[OBSERVE: read last result]
+    B --> C{THINK: LLM/algorithm decides}
+    C -->|"which tool + args"| D{Is the action 'done'?}
+    D -->|YES| E[Return final answer]
+    D -->|NO| F[ACT: call the chosen tool]
+    F --> G{step count < max_steps?}
+    G -->|YES| B
+    G -->|NO| H[Stop - safety limit reached]
 ```
 
 ## Code Walkthrough
@@ -86,6 +87,32 @@ python3 01-foundations/01_simple_loop_agent.py
 ```
 
 **Expected output:** The agent guesses the secret number in ~7 steps using binary search, printing each step's observation and action.
+
+**How the code maps to the agent loop:**
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Loop as Agent Loop (run_agent)
+    participant Brain as Think (binary search)
+    participant Tool as guess_checker
+
+    User->>Loop: secret = 38
+    Loop->>Brain: observation="start", state={low:1, high:100}
+    Brain-->>Loop: action={tool: guess_checker, guess: 50}
+    Loop->>Tool: guess=50, secret=38
+    Tool-->>Loop: "too high"
+    Loop->>Brain: observation="too high", state={low:1, high:49}
+    Brain-->>Loop: action={tool: guess_checker, guess: 25}
+    Loop->>Tool: guess=25, secret=38
+    Tool-->>Loop: "too low"
+    Loop->>Brain: observation="too low", state={low:26, high:49}
+    Brain-->>Loop: action={tool: guess_checker, guess: 37}
+    Note over Loop: ...continues until...
+    Loop->>Brain: observation="correct"
+    Brain-->>Loop: action={tool: done, answer: 38}
+    Loop->>User: Answer: 38
+```
 
 ## Trade-Offs & Alternatives
 

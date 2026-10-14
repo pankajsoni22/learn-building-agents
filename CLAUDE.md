@@ -114,13 +114,40 @@ These are the core areas to cover, roughly in order:
 | Component | Tool | Why |
 |-----------|------|-----|
 | Language | Python 3.10+ | Industry standard for AI/ML, rich ecosystem |
-| LLM Provider (primary) | Google Gemini API (free tier) | Generous free-tier rate limits, function-calling support |
-| LLM Provider (fallback) | Groq (free tier) / HuggingFace Inference API | Fast inference, alternative models, avoids single-provider rate limits |
+| LLM Provider (primary) | **Groq API** — `qwen/qwen3.8-27b` (free tier) | Verified via `GET /v1/models` on our own key — `llama-3.1-8b-instant` (initially assumed from a web search) returned a 404 on this account; `openai/gpt-oss-20b` worked but leaked an internal format token on a multi-turn tool call (see below). Qwen ran cleanly across multiple tests. Native tool-calling support, no credit card required. |
+| LLM Provider (reference/comparison) | Google Gemini API — `gemini-3.5-flash-lite` (free tier) | Used in Lesson 2 Examples 2-4 to learn the tool-calling protocol. Kept as a comparison point — only 20 req/day, but a different model family worth contrasting against. |
 | HTTP Client | `requests` or `httpx` | For raw API calls when learning — understand what SDKs abstract |
 | Environment | `python-dotenv` | Manage API keys without hardcoding |
 | Type Hints | `pydantic` | Validate tool schemas and LLM responses with clear error messages |
+| Dev Cache | `02-tool-use/gemini_cache.py` (local disk cache, our own code) | For the Gemini comparison path: identical requests during development cost zero quota on repeat runs |
 
 *This stack may evolve as we progress through topics. Any change will be explained.*
+
+### Why Groq, Not a Locally-Run Model
+
+We briefly ran `llama3.1:8b` locally via Ollama (installed without sudo under `~/.local/`) as an experiment in zero-rate-limit inference. It worked, but repeatedly proved unreliable for tool-calling in ways Gemini never did across any test: it hallucinated invalid extra tool calls, invented undeclared arguments causing a crash, and once returned a malformed half-serialized tool-call string as if it were a finished answer. It also held ~5.5GB of RAM resident even when idle. **We removed the local setup entirely** (no Ollama install, model files, or related scripts remain in this project) and moved to Groq, which hosts the same Llama 3.1 family at full precision with a far more generous free tier than Gemini and much better observed tool-calling reliability than the local quantized build.
+
+### Verified Gemini Free-Tier Rate Limits (observed, not assumed)
+
+We initially assumed "generous" free-tier limits. Reality, confirmed by hitting a 429 during Lesson 2:
+
+- **20 requests/day, per project, per model** (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`) — this is per exact model name, so `gemini-3.5-flash` and `gemini-3.5-flash-lite` have *separate* 20/day buckets.
+- The quota resets roughly 24h after first use that day — the 429 error body includes an exact `retryDelay` in seconds.
+- **Every script run during development counts.** Debugging the same example 5 times costs 5x quota, even for identical requests — this is why we built the local response cache.
+- **Mitigation strategy if using Gemini:** use the local disk cache (`gemini_cache.py`) during development/debugging so re-running a script doesn't re-spend quota; switch model name (e.g. `-lite` variant) if a bucket is exhausted.
+
+### Verified Groq Free-Tier Rate Limits (observed directly on our own key, Oct 2026)
+
+A web search initially suggested `llama-3.1-8b-instant` with 14,400 requests/day — **this model does not exist on our account** (confirmed via a direct `GET https://api.groq.com/openai/v1/models` call, which is the only way to know for certain; always verify against your own key rather than trusting a generic search result). The actual chat-capable models available on this key: `qwen/qwen3.8-27b`, `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `allam-2-7b`.
+
+We tried `openai/gpt-oss-20b` first — 2/2 clean runs initially, but a 3rd run hit a real, repeatable issue: on a second tool-calling turn, it leaked an internal formatting token (`<|channel|>commentary`, part of OpenAI's "Harmony" response format used by gpt-oss models) directly into the tool name, which Groq's own server-side validation rejected with an HTTP 400. We switched to **`qwen/qwen3.8-27b`**, which does not use this channel architecture and ran cleanly across all tests, including one with 4 parallel tool calls in a single response.
+
+Response headers from a real request (consistent across both models tried):
+- `x-ratelimit-limit-requests: 1000`, resetting on a rolling window of a few minutes — not a once-a-day cap like Gemini's. Dramatically more headroom for iterative development than Gemini's 20/day.
+- No credit card required for the free tier.
+- Native tool/function calling support — Groq uses an OpenAI-compatible API format (different wire shape than Gemini — see `03-multi-step/NOTES.md` for the specifics).
+
+**Lesson learned:** reliability varies by *model*, not just by *provider*. Moving to Groq fixed the local-model reliability problems, but the first model we tried on Groq had its own distinct failure mode. Always test the specific model you plan to use, and keep defensive error handling regardless of how reliable a provider seems.
 
 ## Code Conventions
 
@@ -129,6 +156,7 @@ These are the core areas to cover, roughly in order:
 - Print intermediate steps (observations, thoughts, actions) to stdout so the learner can see the agent's reasoning at each step.
 - Keep each lesson in its own directory: `01-foundations/`, `02-tool-use/`, etc.
 - Include a `README.md` in each lesson directory summarizing what it teaches and how to run it.
+- **All diagrams must use Mermaid syntax** (```mermaid code blocks). No ASCII art diagrams. Mermaid renders natively on GitHub and in most Markdown viewers, keeping diagrams version-controlled, editable, and consistent across all notes.
 
 ## File Structure
 
