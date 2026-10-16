@@ -1,0 +1,3 @@
+- [User Profile](user_profile.md) — SW engineer + student, learning agents, wants step-by-step concept+code explanations
+- [Learning Agents Project](project_learning_agents.md) — Educational project: multi-step agents in Python, free tools, avoid rate limits
+- [Auto Notes Preference](feedback_auto_notes.md) — Every concept must be auto-logged as NOTES.md, EdTech-style, learn-by-reading quality
